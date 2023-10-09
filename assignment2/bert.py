@@ -47,7 +47,24 @@ class BertSelfAttention(nn.Module):
     # multiply the attention scores to the value and get back V' 
 
     # next, we need to concat multi-heads and recover the original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
-    raise NotImplementedError
+    #raise NotImplementedError
+    d_k = key.size(-1)
+    # scores.size = [batch_size, num_attention_heads, seq_len, seq_len]
+    scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+
+    if attention_mask is not None:
+      scores = scores.masked_fill(attention_mask != 0, -1e9)
+    # p_attn.size = [batch_size, num_attention_heads, seq_len, seq_len]
+    p_attn = F.softmax(scores, dim=-1)
+    p_attn = self.dropout(p_attn)
+    # multiply the attention scores to the value and get back V'
+    # attn_value.size = [batch_size, num_attention_heads, seq_len, attention_head_size]
+    attn_value = torch.matmul(p_attn, value)
+    # next, we need to concat multi-heads and recover the original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
+    bs, num_attention_heads, seq_len, attention_head_size = attn_value.size()
+    attn_value_concat = attn_value.transpose(1, 2).contiguous().view(bs, seq_len, num_attention_heads * attention_head_size)
+    # attn_value_concat.size = [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
+    return attn_value_concat
 
   def forward(self, hidden_states, attention_mask):
     """
@@ -90,7 +107,8 @@ class BertLayer(nn.Module):
     This function computes ``LayerNorm(input + Sublayer(output))``, where sublayer is a dense_layer followed by dropout.
     """
     # todo
-    raise NotImplementedError
+    return ln_layer(input + dropout(dense_layer(output)))
+    #raise NotImplementedError
 
   def forward(self, hidden_states, attention_mask):
     """
@@ -103,16 +121,18 @@ class BertLayer(nn.Module):
     4. a add-norm that takes the output of feed forward layer and the input of feed forward layer
     """
     # todo
-    # multi-head attention w/ self.self_attention
-
+    attn_value = self.self_attention(hidden_states, attention_mask)
     # add-norm layer
-
+    l1_output = self.add_norm(hidden_states, attn_value, self.attention_dense, self.attention_dropout, self.attention_layer_norm)
     # feed forward
-
+    ff_value = self.interm_dense(l1_output)
+    ff_value = self.interm_af(ff_value)
     # another add-norm layer
+    l2_output = self.add_norm(l1_output, ff_value, self.out_dense, self.out_dropout, self.out_layer_norm)
+    return l2_output
 
 
-    raise NotImplementedError
+    #raise NotImplementedError
 
 
 class BertModel(BertPreTrainedModel):
@@ -152,7 +172,7 @@ class BertModel(BertPreTrainedModel):
 
     # get word embedding from self.word_embedding
     # todo
-    inputs_embeds = None
+    inputs_embeds = self.word_embedding(input_ids)
 
 
     # get position index and position embedding from self.pos_embedding
@@ -170,7 +190,8 @@ class BertModel(BertPreTrainedModel):
     embeds = self.embed_layer_norm(embeds)
     embeds = self.embed_dropout(embeds)
 
-    raise NotImplementedError
+    return embeds
+    #raise NotImplementedError
 
   def encode(self, hidden_states, attention_mask):
     """
