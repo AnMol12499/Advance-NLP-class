@@ -38,24 +38,29 @@ class BertSentClassifier(torch.nn.Module):
                 param.requires_grad = True
 
         # todo
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.dense_layer1 = nn.Linear(config.hidden_size, config.hidden_size)
-        self.dense_layer1_af = nn.Tanh()
-        self.dense_layer2 = nn.Linear(config.hidden_size, config.num_labels)
+        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
+        #self.dense_layer1 = nn.Linear(config.hidden_size, config.hidden_size)
+        #self.dense_layer1_af = nn.Tanh()
+        self.classifier = torch.nn.Linear(config.hidden_size, config.num_labels)
         #raise NotImplementedError
 
     def forward(self, input_ids, attention_mask):
         # todo
-        output = self.bert(input_ids, attention_mask)
+        #code1
+        """output = self.bert(input_ids, attention_mask)
         first_token = output["pooler_output"]  # [batch_size, hidden_size]
         h1 = self.dense_layer1(first_token)  # [batch_size, hidden_size]
         h1 = self.dense_layer1_af(h1)
         h1 = self.dropout(h1)
         h2 = self.dense_layer2(h1)  # [batch_size, num_labels]
         scores = F.logsigmoid(h2)
-        return scores
+        return scores"""
         # the final bert contextualize embedding is the hidden state of [CLS] token (the first token)
        # raise NotImplementedError
+        pooled_output = self.bert(input_ids= input_ids, attention_mask= attention_mask)['pooler_output']
+        pooled_output = self.dropout(pooled_output)
+        logits = self.classifier(pooled_output)
+        return F.log_softmax(logits, dim=1)
 
 # create a custom Dataset Class to be used for the dataloader
 class BertDataset(Dataset):
