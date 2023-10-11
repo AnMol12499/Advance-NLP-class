@@ -46,22 +46,22 @@ class AdamW(Optimizer):
                 # State initialization
                 if len(state) == 0:
                     state["step"] = 0
-                    state["exp_avg"] = torch.zeros_like(p.data)
-                    state["exp_avg_sq"] = torch.zeros_like(p.data)
+                    state["ex_avg"] = torch.zeros_like(p.data)
+                    state["ex_avg_sq"] = torch.zeros_like(p.data)
     
-                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+                ex_avg, ex_avg_sq = state["ex_avg"], state["ex_avg_sq"]
                 beta1, beta2 = group["betas"]
                 state["step"] += 1
     
                 # Update first and second moments of the gradients
-                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
-                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+                ex_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                ex_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
     
-                # Bias correction from Code 3
+                # Bias correction 
                 if group["correct_bias"]:
-                    bias_correction1 = 1.0 - beta1 ** state["step"]
-                    bias_correction2 = 1.0 - beta2 ** state["step"]
-                    step_size = group["lr"] * math.sqrt(bias_correction2) / bias_correction1
+                    bias_correct1 = 1.0 - beta1 ** state["step"]
+                    bias_correct2 = 1.0 - beta2 ** state["step"]
+                    step_size = group["lr"] * math.sqrt(bias_correct2) / bias_correct1
                 else:
                     step_size = group["lr"]
     
