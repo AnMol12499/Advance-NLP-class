@@ -35,20 +35,12 @@ class BertSelfAttention(nn.Module):
     return proj
 
   def attention(self, key, query, value, attention_mask):
-    # each attention is calculated following eq (1) of https://arxiv.org/pdf/1706.03762.pdf
-    # attention scores are calculated by multiply query and key 
-    # and get back a score matrix S of [bs, num_attention_heads, seq_len, seq_len]
-    # S[*, i, j, k] represents the (unnormalized)attention score between the j-th and k-th token, given by i-th attention head
-    # before normalizing the scores, use the attention mask to mask out the padding token scores
-    # Note again: in the attention_mask non-padding tokens with 0 and padding tokens with a large negative number 
-
-    # next, we need to concat multi-heads and recover the original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
+    
     bs, num_attention_heads, seq_len, attention_head_size = key.size()
 
-    # Calculating attention scores with einsum for better readability
     scores = torch.einsum('nijk,nilk->nijl', [query, key]) / math.sqrt(attention_head_size)
 
-    # Applying the attention mask using masked_fill for better performance
+    # Applying the attention mask using masked_fill
     if attention_mask is not None:
         scores = scores.masked_fill(attention_mask != 0, -1e9)
 
@@ -56,13 +48,13 @@ class BertSelfAttention(nn.Module):
     normalized_scores = F.softmax(scores, dim=-1)
     normalized_scores = self.dropout(normalized_scores)
 
-    # Calculating the attention value using matmul for better performance
+    # Calculating the attention value using matmul 
     attn_value = torch.matmul(normalized_scores, value)
 
-    # Reshaping the attention value using permute and reshape for readability and performance
-    attn_value_reshaped = attn_value.permute(0, 2, 1, 3).contiguous().view(bs, seq_len, -1)
+    # Reshaping the attention value 
+    attnvalue_reshaped = attn_value.permute(0, 2, 1, 3).contiguous().view(bs, seq_len, -1)
 
-    return attn_value_reshaped
+    return attnvalue_reshaped
 
   def forward(self, hidden_states, attention_mask):
     """
