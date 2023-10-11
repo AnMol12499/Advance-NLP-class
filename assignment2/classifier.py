@@ -44,17 +44,8 @@ class BertSentClassifier(torch.nn.Module):
 
     def forward(self, input_ids, attention_mask):
         # todo
-        #code1
-        """output = self.bert(input_ids, attention_mask)
-        first_token = output["pooler_output"]  # [batch_size, hidden_size]
-        h1 = self.dense_layer1(first_token)  # [batch_size, hidden_size]
-        h1 = self.dense_layer1_af(h1)
-        h1 = self.dropout(h1)
-        h2 = self.dense_layer2(h1)  # [batch_size, num_labels]
-        scores = F.logsigmoid(h2)
-        return scores"""
         # the final bert contextualize embedding is the hidden state of [CLS] token (the first token)
-       # raise NotImplementedError
+        # raise NotImplementedError
         bert_output = self.bert(input_ids= input_ids, attention_mask= attention_mask)['pooler_output']
         drop_output = self.dropout_layer(bert_output)
         final_output = self.classify(drop_output)
