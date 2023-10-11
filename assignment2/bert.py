@@ -42,29 +42,27 @@ class BertSelfAttention(nn.Module):
     # before normalizing the scores, use the attention mask to mask out the padding token scores
     # Note again: in the attention_mask non-padding tokens with 0 and padding tokens with a large negative number 
 
-    # normalize the scores
-
-    # multiply the attention scores to the value and get back V' 
-
     # next, we need to concat multi-heads and recover the original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
-    #raise NotImplementedError
-    d_k = key.size(-1)
-    # scores.size = [batch_size, num_attention_heads, seq_len, seq_len]
-    scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+    bs, num_attention_heads, seq_len, attention_head_size = key.size()
 
+    # Calculating attention scores with einsum for better readability
+    scores = torch.einsum('nijk,nilk->nijl', [query, key]) / math.sqrt(attention_head_size)
+
+    # Applying the attention mask using masked_fill for better performance
     if attention_mask is not None:
-      scores = scores.masked_fill(attention_mask != 0, -1e9)
-    # p_attn.size = [batch_size, num_attention_heads, seq_len, seq_len]
-    p_attn = F.softmax(scores, dim=-1)
-    p_attn = self.dropout(p_attn)
-    # multiply the attention scores to the value and get back V'
-    # attn_value.size = [batch_size, num_attention_heads, seq_len, attention_head_size]
-    attn_value = torch.matmul(p_attn, value)
-    # next, we need to concat multi-heads and recover the original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
-    bs, num_attention_heads, seq_len, attention_head_size = attn_value.size()
-    attn_value_concat = attn_value.transpose(1, 2).contiguous().view(bs, seq_len, num_attention_heads * attention_head_size)
-    # attn_value_concat.size = [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
-    return attn_value_concat
+        scores = scores.masked_fill(attention_mask != 0, -1e9)
+
+    # Normalizing the scores using softmax
+    normalized_scores = F.softmax(scores, dim=-1)
+    normalized_scores = self.dropout(normalized_scores)
+
+    # Calculating the attention value using matmul for better performance
+    attn_value = torch.matmul(normalized_scores, value)
+
+    # Reshaping the attention value using permute and reshape for readability and performance
+    attn_value_reshaped = attn_value.permute(0, 2, 1, 3).contiguous().view(bs, seq_len, -1)
+
+    return attn_value_reshaped
 
   def forward(self, hidden_states, attention_mask):
     """
@@ -123,13 +121,12 @@ class BertLayer(nn.Module):
     # todo
     attn_value = self.self_attention(hidden_states, attention_mask)
     # add-norm layer
-    l1_output = self.add_norm(hidden_states, attn_value, self.attention_dense, self.attention_dropout, self.attention_layer_norm)
+    norm_output = self.add_norm(hidden_states, attn_value, self.attention_dense, self.attention_dropout, self.attention_layer_norm)
     # feed forward
-    ff_value = self.interm_dense(l1_output)
-    ff_value = self.interm_af(ff_value)
+    ff_output = self.interm_af(self.interm_dense(norm_output))
     # another add-norm layer
-    l2_output = self.add_norm(l1_output, ff_value, self.out_dense, self.out_dropout, self.out_layer_norm)
-    return l2_output
+    fin_output = self.add_norm(norm_output, ff_output, self.out_dense, self.out_dropout, self.out_layer_norm)
+    return fin_output
 
 
     #raise NotImplementedError
@@ -176,8 +173,8 @@ class BertModel(BertPreTrainedModel):
 
 
     # get position index and position embedding from self.pos_embedding
-    pos_ids = self.position_ids[:, :seq_length]
-    pos_embeds = None
+    posn_id = self.position_ids[:, :seq_length]
+    pos_embeds = self.pos_embedding(posn_id)
 
     # get token type ids, since we are not consider token type, just a placeholder
     tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
