@@ -41,6 +41,7 @@ class BertSentClassifier(torch.nn.Module):
         self.dropout_layer = torch.nn.Dropout(config.hidden_dropout_prob)
         self.classify = torch.nn.Linear(config.hidden_size, config.num_labels)
         #raise NotImplementedError
+        self.relu=torch.nn.ReLU()
 
     def forward(self, input_ids, attention_mask):
         # todo
@@ -48,8 +49,9 @@ class BertSentClassifier(torch.nn.Module):
         # raise NotImplementedError
         bert_output = self.bert(input_ids= input_ids, attention_mask= attention_mask)['pooler_output']
         drop_output = self.dropout_layer(bert_output)
-        final_output = self.classify(drop_output)
-        return F.log_softmax(final_output, dim=1)
+        linear_output = self.classify(drop_output)
+        relu_output = self.relu(linear_output)  # Applying ReLU activation here
+        return F.log_softmax(relu_output, dim=1) 
 
 # create a custom Dataset Class to be used for the dataloader
 class BertDataset(Dataset):
