@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 torch.manual_seed(0)
+import copy
 
 class ToyEncoderDecoderModel(nn.Module):
     def __init__(self, log_prob):
@@ -102,7 +103,21 @@ def topK(score):
         top_beamid = [[0, 2, 1], [2, 0, 1]]
         top_wordid = [[0, 2, 3], [2, 1, 3]]  
     """
-    raise NotImplementedError
+    batch_size, beam_size, vocab_size = score.shape
+
+    score_flat = score.view(batch_size, -1)  
+    top_k_scores, top_k_indices = torch.topk(score_flat, k=beam_size, dim=1)  
+    # print(top_k_scores.shape, top_k_indices.shape)
+    
+    top_beamid = top_k_indices // vocab_size  
+    top_wordid = top_k_indices % vocab_size  
+
+    top_score = top_k_scores.clone()  
+
+    top_beamid = top_beamid.view(batch_size, beam_size)
+    top_wordid = top_wordid.view(batch_size, beam_size)
+
+    return top_score, top_beamid, top_wordid
 
 
 def select_hiddens_by_beams(hiddens, beam_id):
@@ -130,7 +145,7 @@ def select_hiddens_by_beams(hiddens, beam_id):
                                         [0.9372, 0.4993, 0.5471, 0.9169],
                                         [0.9372, 0.4993, 0.5471, 0.9169]]])
     """
-    raise NotImplementedError
+    return  torch.FloatTensor([[hidden_states[id.item()].tolist() for id in ids] for hidden_states, ids in zip(hiddens, beam_id)])
 
 
 def extract_sequences(top_score, top_wordids, top_beamids):
@@ -147,6 +162,30 @@ def extract_sequences(top_score, top_wordids, top_beamids):
     Example: 
         See inputs and expected outputs in test_extract_sequences().
     """
-    raise NotImplementedError
+    
+
+    batch_size, beam_size = top_beamids[0].shape
+    dec_iter = len(top_wordids)
+    sort_score, sorted_indices = torch.sort(top_score, descending=True)
+
+    
+    sequence = torch.zeros((batch_size, beam_size, dec_iter), dtype=torch.long)
+
+    # Backtrack and reconstruct sequences
+    for batch_idx in range(batch_size):
+        for beam_idx in range(beam_size):
+            position = beam_idx
+            for dec_step in range(dec_iter - 1, -1, -1):
+                sequence[batch_idx, beam_idx, dec_step] = top_wordids[dec_step][batch_idx, position]
+                position = top_beamids[dec_step][batch_idx, position]
+
+    # Reorder sequences according to sorted scores
+    sorted_sequences = torch.gather(sequence, 1, sorted_indices.unsqueeze(-1).expand(-1, -1, dec_iter))
+
+    return sorted_sequences, sort_score
+
+
+    
+
 
  
